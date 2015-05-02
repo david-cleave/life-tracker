@@ -3,6 +3,9 @@ using LifeTracker.Providers;
 using Microsoft.Owin;
 using Microsoft.Owin.Security.OAuth;
 using Owin;
+using SimpleInjector;
+using SimpleInjector.Extensions.ExecutionContextScoping;
+using SimpleInjector.Integration.WebApi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +22,21 @@ namespace LifeTracker
             ConfigureOAuth(app);
             
             HttpConfiguration config = new HttpConfiguration();
+
+            var webApiRequestLifestyle = new WebApiRequestLifestyle();
+            var dependencyContainer = new LifeTrackerApiDependencyContainer(config, webApiRequestLifestyle);
+
+            // Simple Injector's web API request scoping in an OWIN context won't work without the following voodoo:
+            app.Use(async (context, next) =>
+            {
+                using (var scope = dependencyContainer.Container.BeginExecutionContextScope())
+                {
+                    await next.Invoke();
+                }
+            });
+
+            config.DependencyResolver = dependencyContainer;
+            
             WebApiConfig.Register(config);
             app.UseCors(Microsoft.Owin.Cors.CorsOptions.AllowAll);
             app.UseWebApi(config);
